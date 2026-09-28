@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <iframe
-        src="/index.html?v=cuepull"
+        src="/index.html?v=aimring"
       title="Billiards"
       style={{
         position: 'fixed',
