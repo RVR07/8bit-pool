@@ -13,6 +13,9 @@ var GameGui = function () {
     if (readout) readout.textContent = strength.value;
     if (game && game.balls[0]) {
       game.balls[0].cueStrength = Number(strength.value);
+      if (!game.balls[0].cueAnimating && game.balls[0].placeCue) {
+        game.balls[0].placeCue(game.balls[0].cueGap());
+      }
     }
     paintStrengthTrack();
     if (typeof Live !== 'undefined' && gui && gui.live && gui.live.on && gui.live.myTurn() && game && game.balls[0]) {
@@ -661,9 +664,10 @@ GameGui.prototype.syncHitButton = function () {
   }
   if (!mine) {
     btn.disabled = true;
-    btn.textContent = 'Wait';
+    GameGui.addClass(btn, 'hide');
     return;
   }
+  GameGui.removeClass(btn, 'hide');
   btn.textContent = 'Hit';
   if (game && game.balls[0] && game.balls[0].aimBlocked) return;
   btn.disabled = false;

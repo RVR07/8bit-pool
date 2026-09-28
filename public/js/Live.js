@@ -190,7 +190,7 @@ Live.capture = function () {
     onTable: eightballgame.numbered_balls_on_table.slice(),
     timer: eightballgame.timerLeft ? eightballgame.timerLeft() : (eightballgame.timer || 0),
     aim: cue.aimAngle,
-    pull: cue.cuePull != null ? cue.cuePull : cue.cueGap(),
+    pull: cue.cueGap(),
     strength: cue.cueStrength,
     gameover: eightballgame.state === 'gameover',
     winner: eightballgame.liveWinner || null
@@ -204,6 +204,9 @@ Live.showOpponentAim = function (aim) {
   if (ball.cueAnimating || ball.rigidBody.sleepState !== CANNON.Body.SLEEPING) return;
   ball.aimAngle = aim.angle;
   ball.cueStrength = aim.strength;
+  ball.remotePull = ball.cueGap();
+  if (ball.updateGuideLine) ball.updateGuideLine();
+  if (!ball.cueAnimating && ball.placeCue) ball.placeCue(ball.remotePull);
 };
 
 Live.takeShots = function (shots) {

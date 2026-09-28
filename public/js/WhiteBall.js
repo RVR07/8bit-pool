@@ -90,7 +90,9 @@ WhiteBall.prototype.tick = function (dt) {
       this.dot.visible = true;
       this.updateGuideLine();
       this.updateIntersectionDot();
-      this.placeCue(this.remotePull != null ? this.remotePull : this.cueGap());
+      var gap = this.cueGap();
+      if (this.useRemoteCue && this.remotePull != null) gap = this.remotePull;
+      this.placeCue(gap);
     }
     return;
   }
