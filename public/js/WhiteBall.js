@@ -72,6 +72,7 @@ WhiteBall.prototype.hitForward = function (strength) {
 
 /** Resets the position to this.defaultPosition */
 WhiteBall.prototype.onEnterHole = function () {
+  if (typeof gui !== 'undefined' && gui.live && gui.live.on && !gui.live.host) return;
   this.rigidBody.velocity = new CANNON.Vec3(0);
   this.rigidBody.angularVelocity = new CANNON.Vec3(0);
   this.rigidBody.position.copy(this.defaultPosition);
@@ -102,6 +103,7 @@ WhiteBall.prototype.tick = function (dt) {
     this.updateIntersectionDot();
     if (!this.cueAnimating) {
       this.placeCue(this.cueGap());
+      if (this.useRemoteCue && this.remotePull != null) this.placeCue(this.remotePull);
     }
   } else {
     if (this.forwardLine.visible) {
@@ -233,6 +235,7 @@ WhiteBall.prototype.placeCue = function (gap) {
   this.cue.rotation.x = 0;
   this.cue.rotation.z = 0;
   this.setCueOpacity(1);
+  this.cuePull = gap;
   this.cue.position.copy(this.mesh.position);
   this.cue.position.x -= this.forward.x * (Ball.RADIUS + gap);
   this.cue.position.z -= this.forward.z * (Ball.RADIUS + gap);

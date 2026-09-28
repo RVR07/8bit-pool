@@ -33,6 +33,11 @@ Ball.envMap = cubeTextureLoader.load(Ball.envMapUrls, function (tex) {
 });
 
 Ball.prototype.onEnterHole = function () {
+  if (typeof gui !== 'undefined' && gui.live && gui.live.on && !gui.live.host) {
+    this.fallen = true;
+    this.mesh.visible = false;
+    return;
+  }
   this.rigidBody.velocity = new CANNON.Vec3(0);
   this.rigidBody.angularVelocity = new CANNON.Vec3(0);
   world.removeBody(this.rigidBody);

@@ -175,9 +175,13 @@ function aimFromPointer(event) {
   aimRaycaster.setFromCamera(aimMouse, camera);
   if (!aimRaycaster.ray.intersectPlane(aimPlane, aimPoint)) return;
   if (!game || !game.balls[0]) return;
+  if (typeof gui !== 'undefined' && gui.live && gui.live.on && typeof eightballgame !== 'undefined' && eightballgame && gui.live.seat !== eightballgame.turn) return;
   if (game.balls[0].showcase || game.balls[0].aimLocked) return;
 
   game.balls[0].setAimToward(aimPoint);
+  if (typeof Live !== 'undefined' && gui.live && gui.live.on && gui.live.myTurn()) {
+    Live.noteAim(game.balls[0].aimAngle, game.balls[0].cueStrength);
+  }
 }
 
 function draw() {
@@ -188,7 +192,8 @@ function draw() {
   camera.lookAt(controls.target);
 
   // Physics world
-  world.step(w.fixedTimeStep);
+  var watching = typeof gui !== 'undefined' && gui.live && gui.live.on && !gui.live.host;
+  if (!watching) world.step(w.fixedTimeStep);
 
   // THREE objects
   var dt = clock.getDelta();

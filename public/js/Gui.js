@@ -15,6 +15,9 @@ var GameGui = function () {
       game.balls[0].cueStrength = Number(strength.value);
     }
     paintStrengthTrack();
+    if (typeof Live !== 'undefined' && gui && gui.live && gui.live.on && gui.live.myTurn() && game && game.balls[0]) {
+      Live.noteAim(game.balls[0].aimAngle, Number(strength.value));
+    }
   });
   btn_ball.onclick = function () {
     if (typeof Sound !== 'undefined') Sound.ensure();
@@ -196,7 +199,7 @@ GameGui.prototype.queueMatch = function (id) {
       .then(function (data) {
         if (self.matchToken !== token) return;
         if (data.status === 'matched' && data.opponent) {
-          self.finishSearch(id, data.opponent, data.opponentCue);
+          self.finishSearch(id, data.opponent, data.opponentCue, data.sessionId, data.seat);
           return;
         }
         if (data.status !== 'waiting') {
@@ -207,7 +210,7 @@ GameGui.prototype.queueMatch = function (id) {
           }).then(function (res) { return res.json(); }).then(function (joined) {
             if (self.matchToken !== token) return;
             if (joined.status === 'matched' && joined.opponent) {
-              self.finishSearch(id, joined.opponent, joined.opponentCue);
+              self.finishSearch(id, joined.opponent, joined.opponentCue, joined.sessionId, joined.seat);
             }
           });
         }
@@ -223,7 +226,7 @@ GameGui.prototype.queueMatch = function (id) {
   }).then(function (res) { return res.json(); }).then(function (joined) {
     if (self.matchToken !== token) return;
     if (joined.status === 'matched' && joined.opponent) {
-      self.finishSearch(id, joined.opponent, joined.opponentCue);
+      self.finishSearch(id, joined.opponent, joined.opponentCue, joined.sessionId, joined.seat);
       return;
     }
     self.matchTimer = setInterval(poll, 1500);
@@ -249,14 +252,14 @@ GameGui.prototype.otherCue = function () {
   return cues[0].id;
 };
 
-GameGui.prototype.finishSearch = function (id, opponent, opponentCue) {
+GameGui.prototype.finishSearch = function (id, opponent, opponentCue, sessionId, seat) {
   this.matchToken = (this.matchToken || 0) + 1;
   if (this.matchTimer) {
     clearInterval(this.matchTimer);
     this.matchTimer = null;
   }
   this.hide(document.getElementById('matchSearch'));
-  this.startCity(id, opponent, opponentCue);
+  this.startCity(id, opponent, opponentCue, sessionId, seat);
 };
 
 GameGui.prototype.cancelMatch = function () {
@@ -272,8 +275,11 @@ GameGui.prototype.cancelMatch = function () {
 };
 
 GameGui.prototype.startBot = function () {
+  if (typeof Live !== 'undefined') Live.stop();
   this.versus = 'bot';
   this.opponent = null;
+  this.sessionId = null;
+  this.showSession(null);
   this.playerCues = { player1: this.myCue(), player2: this.otherCue() };
   this.city = null;
   var matchPot = document.querySelector('#controlsHud .pot-label');
@@ -368,7 +374,7 @@ GameGui.prototype.closeCues = function () {
   }
 };
 
-GameGui.prototype.startCity = function (id, opponent, opponentCue) {
+GameGui.prototype.startCity = function (id, opponent, opponentCue, sessionId, seat) {
   var city = GameGui.CITIES[id];
   if (!city) return;
   var matchPot = document.querySelector('#controlsHud .pot-label');
@@ -378,14 +384,33 @@ GameGui.prototype.startCity = function (id, opponent, opponentCue) {
   if (endPot) endPot.textContent = 'Pot ' + amount;
   this.versus = 'player';
   this.opponent = opponent || null;
+  this.sessionId = sessionId || null;
+  seat = seat === 'player2' ? 'player2' : 'player1';
+  var mine = this.myCue();
   var theirs = opponentCue && typeof WhiteBall !== 'undefined' ? WhiteBall.cueById(opponentCue).id : this.otherCue();
-  this.playerCues = { player1: this.myCue(), player2: theirs };
+  this.playerCues = seat === 'player2'
+    ? { player1: theirs, player2: mine }
+    : { player1: mine, player2: theirs };
   this.city = city;
   this.balance = Math.max(0, this.balance - city.entry);
   this.saveProfile();
   this.renderProfile();
+  this.showSession(sessionId);
   if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(id);
+  if (sessionId && typeof Live !== 'undefined') Live.prepare(sessionId, seat);
   this.play8BallClicked();
+};
+
+GameGui.prototype.showSession = function (id) {
+  var node = document.getElementById('session_id');
+  if (!node) return;
+  if (!id) {
+    node.textContent = '';
+    GameGui.addClass(node, 'hide');
+    return;
+  }
+  node.textContent = id;
+  GameGui.removeClass(node, 'hide');
 };
 
 GameGui.prototype.loadProfile = function () {
@@ -518,8 +543,14 @@ GameGui.prototype.paintMatchPlayers = function () {
     return;
   }
   if (linked && this.versus === 'player' && this.opponent) {
-    Wallet.drawFace(p1Face, Wallet.account);
-    Wallet.drawFace(p2Face, this.opponent);
+    var leftAddr = Wallet.account;
+    var rightAddr = this.opponent;
+    if (this.live && this.live.seat === 'player2') {
+      leftAddr = this.opponent;
+      rightAddr = Wallet.account;
+    }
+    Wallet.drawFace(p1Face, leftAddr);
+    Wallet.drawFace(p2Face, rightAddr);
     if (p1Face) GameGui.removeClass(p1Face, 'hide');
     if (p2Face) GameGui.removeClass(p2Face, 'hide');
     if (p1Mark) GameGui.addClass(p1Mark, 'hide');
@@ -530,8 +561,8 @@ GameGui.prototype.paintMatchPlayers = function () {
       GameGui.addClass(p2Avatar, 'is-face');
       GameGui.removeClass(p2Avatar, 'is-opponent');
     }
-    if (p1Name) p1Name.textContent = Wallet.short(Wallet.account);
-    if (p2Name) p2Name.textContent = Wallet.short(this.opponent);
+    if (p1Name) p1Name.textContent = Wallet.short(leftAddr);
+    if (p2Name) p2Name.textContent = Wallet.short(rightAddr);
     return;
   }
   if (linked) {
@@ -606,6 +637,22 @@ GameGui.prototype.updateTurn = function(str) {
   var cues = this.playerCues || { player1: this.myCue(), player2: this.otherCue() };
   var id = str === 'player2' ? cues.player2 : cues.player1;
   if (game && game.balls && game.balls[0] && id) game.balls[0].applyCue(id, false);
+  this.syncHitButton();
+};
+
+GameGui.prototype.syncHitButton = function () {
+  var btn = document.getElementById('btn_ball');
+  if (!btn) return;
+  var live = this.live && this.live.on;
+  var mine = !live || (typeof eightballgame !== 'undefined' && eightballgame && this.live.myTurn());
+  if (!mine) {
+    btn.disabled = true;
+    btn.textContent = 'Wait';
+    return;
+  }
+  btn.textContent = 'Hit';
+  if (game && game.balls[0] && game.balls[0].aimBlocked) return;
+  btn.disabled = false;
 };
 
 GameGui.prototype.updateBalls = function(ballArr, p1side, p2side) {
@@ -737,7 +784,9 @@ GameGui.ballIcon = function (number) {
 GameGui.iconCache = {};
 
 GameGui.prototype.showEndGame = function(str) {
-  if (str === 'Player 1' && this.city) {
+  var mine = 'Player 1';
+  if (this.live && this.live.on) mine = this.live.seat === 'player2' ? 'Player 2' : 'Player 1';
+  if (str === mine && this.city) {
     this.wins += 1;
     this.balance += this.city.prize;
     this.saveProfile();

@@ -14,7 +14,22 @@ var EightBallGame = function()
   this.ticker = undefined;
 
   gui.setupGameHud();
-  setTimeout(this.startTurn, 2000);
+  if (gui.live && gui.live.on) {
+    gui.log('Waiting for opponent');
+    if (gui.live.host) {
+      var waitReady = function () {
+        if (!gui.live || !gui.live.on || eightballgame.state === 'gameover') return;
+        if (gui.live.opponentReady) {
+          setTimeout(eightballgame.startTurn, 400);
+          return;
+        }
+        setTimeout(waitReady, 200);
+      };
+      setTimeout(waitReady, 200);
+    }
+  } else {
+    setTimeout(this.startTurn, 2000);
+  }
 }
 
 EightBallGame.prototype.startTurn = function () {
@@ -98,11 +113,18 @@ EightBallGame.prototype.switchSides = function () {
 EightBallGame.prototype.endGame = function () {
   eightballgame.state = 'gameover';
   var winner = eightballgame.turn == 'player1' ? 'Player 1' : 'Player 2';
+  eightballgame.liveWinner = winner;
   clearTimeout(eightballgame.ticker);
   gui.showEndGame(winner);
 }
 
 EightBallGame.prototype.hitButtonClicked = function (strength) {
+  var remote = !!this._remoteShot;
+  if (!remote && gui.live && gui.live.on && !gui.live.myTurn()) return;
+  if (!remote && gui.live && gui.live.on && !gui.live.host) {
+    Live.sendShot(strength);
+    return;
+  }
   if (game.balls[0].aimBlocked) return;
   if (game.balls[0].rigidBody.sleepState == CANNON.Body.SLEEPING && eightballgame.state == 'turn') {
     game.ballHit(strength);
