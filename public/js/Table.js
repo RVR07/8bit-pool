@@ -130,14 +130,15 @@ Table.CITY_CLOTH = {
   monaco: { felt: 0x3a5568, rail: 0x14181e }
 };
 
+Table.HOME_CLOTH = { felt: 0x3c424a, rail: 0x16181c };
+
 Table.setCity = function (id) {
   Table.city = id;
   Table.applyCity();
 };
 
 Table.applyCity = function () {
-  var cloth = Table.CITY_CLOTH[Table.city];
-  if (!cloth) return;
+  var cloth = Table.CITY_CLOTH[Table.city] || Table.HOME_CLOTH;
   if (Table.feltMesh) Table.feltMesh.material.color.setHex(cloth.felt);
   if (Table.edgeMesh) Table.edgeMesh.material.color.setHex(cloth.rail);
 };

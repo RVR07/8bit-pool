@@ -200,6 +200,7 @@ GameGui.prototype.queueMatch = function (id) {
   if (label) label.textContent = Wallet.short(address);
   this.setSearching(true);
   this.show(document.getElementById('matchSearch'));
+  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(id);
   function poll() {
     if (self.matchToken !== token) return;
     fetch('/api/match?address=' + encodeURIComponent(address) + '&city=' + encodeURIComponent(id))
@@ -279,6 +280,7 @@ GameGui.prototype.cancelMatch = function () {
   }
   this.hide(document.getElementById('matchSearch'));
   this.setSearching(false);
+  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(null);
   if (typeof Wallet !== 'undefined' && Wallet.account) {
     fetch('/api/match?address=' + encodeURIComponent(Wallet.account), { method: 'DELETE' }).catch(function () {});
   }
@@ -296,11 +298,7 @@ GameGui.prototype.startBot = function () {
   var endPot = document.querySelector('#gameover .pot-label');
   if (matchPot) matchPot.textContent = 'Practice';
   if (endPot) endPot.textContent = 'Practice';
-  if (typeof Table !== 'undefined') {
-    Table.city = null;
-    if (Table.feltMesh) Table.feltMesh.material.color.setHex(0x3c424a);
-    if (Table.edgeMesh) Table.edgeMesh.material.color.setHex(0x16181c);
-  }
+  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(null);
   this.play8BallClicked();
 };
 
