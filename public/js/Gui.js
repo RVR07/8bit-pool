@@ -649,9 +649,16 @@ GameGui.prototype.updateTurn = function(str) {
 
 GameGui.prototype.syncHitButton = function () {
   var btn = document.getElementById('btn_ball');
+  var power = document.querySelector('#controlsHud .power');
   if (!btn) return;
   var live = this.live && this.live.on;
-  var mine = !live || (typeof eightballgame !== 'undefined' && eightballgame && this.live.myTurn());
+  var gameOn = typeof eightballgame !== 'undefined' && eightballgame;
+  var mySeat = !live || !gameOn || this.live.seat === eightballgame.turn;
+  var mine = !live || (gameOn && this.live.myTurn());
+  if (power) {
+    if (mySeat) GameGui.removeClass(power, 'hide');
+    else GameGui.addClass(power, 'hide');
+  }
   if (!mine) {
     btn.disabled = true;
     btn.textContent = 'Wait';

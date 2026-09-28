@@ -85,6 +85,7 @@ Live.sendShot = function (strength) {
   this.aim = { angle: ball.aimAngle, strength: strength };
   this.shot = {
     id: this.seat + '-' + Date.now(),
+    by: this.seat,
     strength: strength,
     angle: ball.aimAngle
   };
@@ -147,8 +148,7 @@ Live.consume = function (row) {
       gui.log('Opponent connected');
     }
     if (row.shot && row.shot.id && !this.applied[row.shot.id]) {
-      this.takeShots([row.shot]);
-      this.clearShot = true;
+      if (this.takeShots([row.shot])) this.clearShot = true;
     }
     this.showOpponentAim(row.aim2);
     return;
@@ -207,22 +207,33 @@ Live.showOpponentAim = function (aim) {
 };
 
 Live.takeShots = function (shots) {
-  if (!this.host || !shots || !game || !eightballgame) return;
+  if (!this.host || !shots || !game || !eightballgame) return false;
+  var done = false;
   for (var i = 0; i < shots.length; i++) {
     var shot = shots[i];
     if (!shot || this.applied[shot.id]) continue;
-    this.applied[shot.id] = true;
-    if (shot.by !== eightballgame.turn) continue;
-    if (eightballgame.state !== 'turn') continue;
+    if (shot.by !== eightballgame.turn) {
+      this.applied[shot.id] = true;
+      done = true;
+      continue;
+    }
+    if (eightballgame.state !== 'turn') return false;
     var ball = game.balls[0];
     ball.aimAngle = shot.angle;
     ball.cueStrength = shot.strength;
     if (ball.updateGuideLine) ball.updateGuideLine();
-    if (ball.aimBlocked) continue;
+    if (ball.aimBlocked) {
+      this.applied[shot.id] = true;
+      done = true;
+      continue;
+    }
+    this.applied[shot.id] = true;
     eightballgame._remoteShot = true;
     eightballgame.hitButtonClicked(shot.strength);
     eightballgame._remoteShot = false;
+    done = true;
   }
+  return done;
 };
 
 Live.applySnapshot = function (snap) {
