@@ -22,12 +22,20 @@ var Table = function () {
   });
 
   loader.load('json/table/felt.json', function (geometry) {
+    Table.assignClothUVs(geometry, 1.35);
+    var feltMap = Table.repeatTexture('images/table/felt.jpg?v=fade2');
+    var feltBump = Table.repeatTexture('images/table/felt-bump.jpg?v=fade2');
     var mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({
-      color: new THREE.Color(TABLE_COLORS.cloth),
-      specular: 0x404040,
-      shininess: 10,
+      color: 0x3c424a,
+      map: feltMap,
+      bumpMap: feltBump,
+      bumpScale: 0.12,
+      specular: 0x1c1c1c,
+      shininess: 6,
       shading: THREE.SmoothShading
     }));
+    Table.feltMesh = mesh;
+    Table.applyCity();
 
     mesh.position.x = mesh_x;
     mesh.position.y = mesh_y;
@@ -39,12 +47,20 @@ var Table = function () {
   });
 
   loader.load('json/table/edges.json', function (geometry) {
+    Table.assignWoodUVs(geometry, 0.85);
+    var woodMap = Table.repeatTexture('images/table/wood.jpg?v=fade');
+    var woodBump = Table.repeatTexture('images/table/wood-bump.jpg?v=fade');
     var mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({
-      color: new THREE.Color(0x7a5230),
-      specular: 0x404040,
-      shininess: 100,
+      color: 0x16181c,
+      map: woodMap,
+      bumpMap: woodBump,
+      bumpScale: 0.4,
+      specular: 0x2a2a2a,
+      shininess: 18,
       shading: THREE.SmoothShading
     }));
+    Table.edgeMesh = mesh;
+    Table.applyCity();
 
     mesh.position.x = mesh_x;
     mesh.position.y = mesh_y;
@@ -57,9 +73,9 @@ var Table = function () {
 
   loader.load('json/table/pockets.json', function (geometry) {
     var mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({
-      color: new THREE.Color(0x7a5230),
-      specular: 0x3D3D3D,
-      shininess: 20,
+      color: 0x101216,
+      specular: 0x1a1a1a,
+      shininess: 12,
       shading: THREE.SmoothShading
     }));
 
@@ -104,8 +120,68 @@ var Table = function () {
   this.walls = this.createWallBodies();
 };
 
-var TABLE_COLORS = {
-  cloth: 0x4d9900
+Table.CITY_CLOTH = {
+  lisbon: { felt: 0x8a6244, rail: 0x2a2018 },
+  cairo:  { felt: 0xa07848, rail: 0x2c2216 },
+  venice: { felt: 0x3f6e78, rail: 0x141c20 },
+  paris:  { felt: 0x7a5564, rail: 0x24181c },
+  london: { felt: 0x6a4a50, rail: 0x201618 },
+  tokyo:  { felt: 0x4e4a78, rail: 0x16141e },
+  monaco: { felt: 0x3a5568, rail: 0x14181e }
+};
+
+Table.setCity = function (id) {
+  Table.city = id;
+  Table.applyCity();
+};
+
+Table.applyCity = function () {
+  var cloth = Table.CITY_CLOTH[Table.city];
+  if (!cloth) return;
+  if (Table.feltMesh) Table.feltMesh.material.color.setHex(cloth.felt);
+  if (Table.edgeMesh) Table.edgeMesh.material.color.setHex(cloth.rail);
+};
+
+Table.repeatTexture = function (url) {
+  var texture = THREE.ImageUtils.loadTexture(url);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = renderer && renderer.getMaxAnisotropy ? Math.min(8, renderer.getMaxAnisotropy()) : 4;
+  return texture;
+};
+
+Table.assignClothUVs = function (geometry, scale) {
+  Table.assignUVs(geometry, function (v) {
+    return new THREE.Vector2(v.x * scale, v.z * scale);
+  });
+};
+
+Table.assignWoodUVs = function (geometry, scale) {
+  geometry.computeFaceNormals();
+  var side = scale * 14;
+  Table.assignUVs(geometry, function (v, face) {
+    var n = face.normal;
+    var ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+    if (ay >= ax && ay >= az) return new THREE.Vector2(v.x * scale, v.z * scale);
+    if (ax >= az) return new THREE.Vector2(v.z * scale, v.y * side);
+    return new THREE.Vector2(v.x * scale, v.y * side);
+  });
+};
+
+Table.assignUVs = function (geometry, project) {
+  var uvs = [];
+  for (var i = 0; i < geometry.faces.length; i++) {
+    var face = geometry.faces[i];
+    var ids = [face.a, face.b, face.c];
+    if (face.d !== undefined) ids.push(face.d);
+    var faceUvs = [];
+    for (var k = 0; k < ids.length; k++) {
+      faceUvs.push(project(geometry.vertices[ids[k]], face));
+    }
+    uvs.push(faceUvs);
+  }
+  geometry.faceVertexUvs[0] = uvs;
+  geometry.uvsNeedUpdate = true;
 };
 
 Table.LEN_Z = 137.16;

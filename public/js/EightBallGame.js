@@ -73,6 +73,8 @@ EightBallGame.prototype.coloredBallEnteredHole = function (name) {
       }
     }
   }
+
+  gui.updateBalls(eightballgame.numbered_balls_on_table, eightballgame.sides.player1, eightballgame.sides.player2);
 }
 
 EightBallGame.prototype.tickTimer = function () {
@@ -101,11 +103,13 @@ EightBallGame.prototype.endGame = function () {
 }
 
 EightBallGame.prototype.hitButtonClicked = function (strength) {
+  if (game.balls[0].aimBlocked) return;
   if (game.balls[0].rigidBody.sleepState == CANNON.Body.SLEEPING && eightballgame.state == 'turn') {
     game.ballHit(strength);
     clearTimeout(eightballgame.ticker);
     eightballgame.state = 'turnwaiting';
     var x = setInterval(function() {
+      if (game.balls[0].cueAnimating) return;
       if (game.balls[0].rigidBody.sleepState != CANNON.Body.SLEEPING) return;
       for (var i=1;i<game.balls.length;i++) {
         if (game.balls[i].rigidBody.sleepState != CANNON.Body.SLEEPING && eightballgame.numbered_balls_on_table.indexOf(Number(game.balls[i].name.split('ball')[0])) > -1) {

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Billiard</title>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Bodoni+Moda:opsz,wght@6..96,500&family=Cinzel:wght@500&family=Fraunces:opsz,wght@9..144,500&family=Italiana&family=Shippori+Mincho:wght@500&display=swap">
+    <link rel="stylesheet" href="styles.css?v=match">
+    <!-- external js libs -->
+    <script type="text/javascript" src="lib/three.js/build/three.min.js"></script>
+    <script type="text/javascript" src="lib/cannon.min.js"></script>
+    <script type="text/javascript" src="lib/stats.min.js"></script>
+    <script type="text/javascript" src="lib/OrbitControls.js"></script>
+
+    <script type="text/javascript" src="js/CannonUtils.js"></script>
+
+    <script type="text/javascript" src="js/Arch.js"></script>
+    <script type="text/javascript" src="js/Sound.js?v=sfx"></script>
+    <script type="text/javascript" src="js/Wallet.js?v=players"></script>
+    <script type="text/javascript" src="js/Gui.js?v=cues"></script>
+    <script type="text/javascript" src="js/Hole.js"></script>
+    <script type="text/javascript" src="js/LongWall.js"></script>
+    <script type="text/javascript" src="js/ShortWall.js"></script>
+    <script type="text/javascript" src="js/Table.js?v=fade2"></script>
+    <script type="text/javascript" src="js/Ball.js"></script>
+    <script type="text/javascript" src="js/WhiteBall.js?v=cues"></script>
+    <script type="text/javascript" src="js/TableLight.js"></script>
+    <script type="text/javascript" src="js/Game.js?v=sfx"></script>
+    <script type="text/javascript" src="js/EightBallGame.js?v=aim"></script>
+    <script type="text/javascript" src="js/main.js?v=cuepick"></script>
+  </head>
+
+  <body onload="onLoad()">
+    <div id="overlay">
+      <aside id="profile">
+        <button type="button" id="cue_btn" aria-label="Cues">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4.5 19.5l11-11"></path>
+            <path d="M15.5 8.5l4-4"></path>
+          </svg>
+        </button>
+        <div class="profile-avatar" id="profile_avatar">
+          <svg id="profile_silhouette" viewBox="0 0 24 24">
+            <circle cx="12" cy="9" r="3.2"></circle>
+            <path d="M5.6 19.2c1.3-2.7 3.5-4 6.4-4s5.1 1.3 6.4 4"></path>
+          </svg>
+          <canvas id="profile_face" width="84" height="84" class="hide"></canvas>
+        </div>
+        <div class="profile-meta">
+          <span id="profile_name" class="hide"></span>
+          <span id="profile_wins">0 wins</span>
+          <span class="profile-balance"><img class="usdc" src="images/usdc.svg?v=neutral" alt=""><span id="profile_balance">2,500</span><button type="button" id="wallet_btn">Connect</button></span>
+        </div>
+      </aside>
+      <div id="loading">
+        <h1>Loading, please wait...</h1>
+        <div class="progress">
+          <div id="prog-bar" class="progress-bar" role="progressbar" aria-valuenow="0"
+            aria-valuemin="0" aria-valuemax="100">
+            <span class="sr-only">Loading...</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="mainMenu" class="hide">
+        <div class="menu-card">
+          <p class="menu-kicker">Eight ball</p>
+          <h1>Billiards</h1>
+          <button type="button" onclick="gui.openLobby()" class="play-btn">Play</button>
+        </div>
+      </div>
+
+      <div id="cueMenu" class="hide">
+        <button type="button" class="lobby-back" id="cue_back">Back</button>
+        <button type="button" class="cue-arrow is-prev" data-dir="-1" aria-label="Previous cue"></button>
+        <button type="button" class="cue-arrow is-next" data-dir="1" aria-label="Next cue"></button>
+        <p id="cue_name">Classic</p>
+      </div>
+
+      <div id="lobby" class="hide">
+        <button type="button" class="lobby-back" onclick="gui.closeLobby()">Back</button>
+        <p class="lobby-kicker">Tables</p>
+        <div class="city-stage">
+          <button type="button" class="carousel-nav" data-dir="-1" aria-label="Previous"></button>
+          <div class="city-row">
+            <button type="button" class="city-card city-bot" data-city="bot">
+              <span class="city-body">
+                <span class="city-name">Play with bot</span>
+                <span class="city-stats">
+                  <span class="city-money"><em>Practice</em><b>Free</b></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-lisbon" data-city="lisbon">
+              <img class="city-photo" src="images/cities/lisbon-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Lisbon</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>0</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>45</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>25</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-cairo" data-city="cairo">
+              <img class="city-photo" src="images/cities/cairo-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Cairo</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>8</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>180</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>100</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-venice" data-city="venice">
+              <img class="city-photo" src="images/cities/venice-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Venice</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>25</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>450</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>250</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-paris" data-city="paris">
+              <img class="city-photo" src="images/cities/paris-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Paris</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>60</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>900</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>500</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-london" data-city="london">
+              <img class="city-photo" src="images/cities/london-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">London</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>100</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>1,200</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>700</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-tokyo" data-city="tokyo">
+              <img class="city-photo" src="images/cities/tokyo-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Tokyo</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>150</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>1,800</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>1,000</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="city-card city-monaco" data-city="monaco">
+              <img class="city-photo" src="images/cities/monaco-map.jpg?v=map" alt="">
+              <span class="city-body">
+                <span class="city-name">Monaco</span>
+                <span class="city-stats">
+                  <span class="city-wins"><svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.2A2.8 2.8 0 0 0 8 10.2M16 6h2.8A2.8 2.8 0 0 1 16 10.2"/><path d="M12 13.5V17M9 20h6"/></svg><b>400</b><em>wins</em></span>
+                  <span class="city-money"><em>Prize</em><b>9,000</b><img class="usdc" src="images/usdc.svg?v=neutral" alt="USDC"></span>
+                  <span class="city-money"><em>Entry</em><b>5,000</b><img class="usdc" src="images/usdc.svg?v=neutral" alt=""></span>
+                </span>
+              </span>
+            </button>
+          </div>
+          <button type="button" class="carousel-nav" data-dir="1" aria-label="Next"></button>
+        </div>
+        <div id="matchSearch" class="hide">
+          <p class="match-search-kicker">Matchmaking</p>
+          <h2 id="matchSearchTitle">Lisbon</h2>
+          <p id="matchSearchStatus">Looking for a connected player</p>
+          <button type="button" id="matchSearchCancel">Cancel</button>
+        </div>
+        <p class="map-credit">Maps © OpenStreetMap</p>
+      </div>
+
+      <div id="controlsHud" class="hide">
+        <div class="matchbar">
+          <div class="player player1 unknown">
+            <div class="identity">
+              <div class="avatar-wrap">
+                <svg class="timer-ring" viewBox="0 0 64 64" aria-hidden="true">
+                  <circle class="timer-track" cx="32" cy="32" r="29"></circle>
+                  <circle class="timer-stroke" cx="32" cy="32" r="29" pathLength="100"></circle>
+                </svg>
+                <div class="avatar" id="p1_avatar">
+                  <span class="avatar-mark">1</span>
+                  <canvas id="p1_face" width="80" height="80" class="hide"></canvas>
+                </div>
+              </div>
+              <div class="nameplate">
+                <strong id="p1_name">Player 1</strong>
+                <span></span>
+              </div>
+              <div class="score">0</div>
+            </div>
+            <ul>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+            </ul>
+          </div>
+
+          <div class="match-center">
+            <div class="eight-badge">8</div>
+            <div class="pot"><img class="usdc" src="images/usdc.svg?v=neutral" alt=""><span class="pot-label">25</span></div>
+          </div>
+
+          <div class="player player2 unknown">
+            <div class="identity">
+              <div class="score">0</div>
+              <div class="nameplate">
+                <strong id="p2_name">Player 2</strong>
+                <span></span>
+              </div>
+              <div class="avatar-wrap">
+                <svg class="timer-ring" viewBox="0 0 64 64" aria-hidden="true">
+                  <circle class="timer-track" cx="32" cy="32" r="29"></circle>
+                  <circle class="timer-stroke" cx="32" cy="32" r="29" pathLength="100"></circle>
+                </svg>
+                <div class="avatar" id="p2_avatar">
+                  <span class="avatar-mark">2</span>
+                  <canvas id="p2_face" width="80" height="80" class="hide"></canvas>
+                  <svg class="avatar-opponent hide" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="9" r="3.2"></circle>
+                    <path d="M5.6 19.2c1.3-2.7 3.5-4 6.4-4s5.1 1.3 6.4 4"></path>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <ul>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+              <li></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="shootControls">
+          <div class="power">
+            <span class="power-label">Strength</span>
+            <output id="power_readout" for="range_strength">55</output>
+            <form>
+              <input id="range_strength" type="range" name="strength" min="10" max="100" value="55">
+            </form>
+          </div>
+
+          <button id="btn_ball" type="button">Hit</button>
+        </div>
+
+        <ul class="gamelog list-unstyled">
+
+        </ul>
+
+        <div class="clock">
+          <span class="clock-label">Shot</span>
+          <div class="timer">30</div>
+        </div>
+        <div id="fps_stats_container"></div>
+      </div>
+
+      <div id="gameover" class="hide">
+        <h1>Player won!</h1>
+        <p class="end-pot"><img class="usdc" src="images/usdc.svg?v=neutral" alt=""><span class="pot-label">Pot 25</span></p>
+      </div>
+
+      <div id="canvas"></div>
+    </div>
+	</body>
+</html>

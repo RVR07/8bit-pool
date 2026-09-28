@@ -58,7 +58,7 @@ Ball.prototype.createBody = function (x,y,z) {
 };
 
 Ball.prototype.createMesh = function (x,y,z) {
-  var geometry = new THREE.SphereGeometry(Ball.RADIUS, 16, 16);
+  var geometry = new THREE.SphereGeometry(Ball.RADIUS, 40, 32);
   var material = new THREE.MeshPhongMaterial({
     specular: 0xffffff,
     shininess: 140,

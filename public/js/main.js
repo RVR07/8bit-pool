@@ -22,6 +22,7 @@ THREE.DefaultLoadingManager.onProgress = function (item, loaded, total) {
     progBarDiv.parentNode.removeChild(progBarDiv);
 
     gui.show(document.getElementById('mainMenu'));
+    if (game && game.showMenuPose) game.showMenuPose();
 
     // attach the render-supplied DOM element
     var canvasContainer = document.getElementById('canvas');
@@ -53,10 +54,12 @@ function onLoad() {
   scene.add(camera);
 
   // create renderer
-  renderer = new THREE.WebGLRenderer();
-  renderer.setSize(WIDTH, HEIGHT);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  resizeGame();
+  window.addEventListener('resize', resizeGame);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMapSoft = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   // Setup our cannon.js world for physics
   world = createPhysicsWorld();
@@ -67,21 +70,35 @@ function onLoad() {
   // Configure lighting:
   addLights();
 
-  // MOUSE controls
+  // Camera stays locked overhead. Dragging aims the cue ball instead.
   controls = new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enabled = false;
 
-  controls.enableZoom = true;
-  controls.enablePan = true;
+  controls.target.set(0, 0, 0);
+  camera.position.set(0, CAMERA_HEIGHT, 0.5);
+  camera.lookAt(controls.target);
 
-  controls.minDistance = 35;
-  controls.maxDistance = 165;
-  // Don't let the camera go below the ground
-  controls.maxPolarAngle = 0.49 * Math.PI;
-
-  camera.position.set(-170, 70, 0);
+  setupAimDrag();
 
   // make the background void a grey color instead of black.
-  renderer.setClearColor(0x262626, 1);
+  renderer.setClearColor(0x101114, 1);
+}
+
+function resizeGame() {
+  var width = window.innerWidth;
+  var height = window.innerHeight;
+  if (height < 1) height = 1;
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+
+  var tan = Math.tan((VIEW_ANGLE * Math.PI / 180) / 2);
+  var halfX = Table.LEN_X / 2 + 36;
+  var halfZ = Table.LEN_Z / 2 + 36;
+  var distForWidth = halfX / (tan * camera.aspect);
+  var distForHeight = halfZ / tan;
+  CAMERA_HEIGHT = Math.max(distForWidth, distForHeight) * 1.08;
+  if (typeof WhiteBall !== 'undefined' && WhiteBall.resizeOverlay) WhiteBall.resizeOverlay();
 }
 
 function createPhysicsWorld () {
@@ -125,12 +142,50 @@ function setCollisionBehaviour() {
   world.addContactMaterial(ball_wall);
 }
 
+var CAMERA_HEIGHT = 250;
+
+var aimRaycaster = new THREE.Raycaster();
+var aimMouse = new THREE.Vector2();
+var aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+var aimPoint = new THREE.Vector3();
+
+function setupAimDrag() {
+  var canvas = renderer.domElement;
+  canvas.addEventListener('mousemove', aimFromPointer);
+  canvas.addEventListener('mousedown', function (event) {
+    if (event.button !== 0) return;
+    if (!game || !game.balls[0] || game.balls[0].showcase) return;
+    var ball = game.balls[0];
+    if (ball.aimLocked) {
+      ball.aimLocked = false;
+      aimFromPointer(event);
+    } else {
+      aimFromPointer(event);
+      ball.aimLocked = true;
+    }
+  });
+}
+
+function aimFromPointer(event) {
+  var rect = renderer.domElement.getBoundingClientRect();
+  aimMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  aimMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  camera.updateMatrixWorld();
+  aimRaycaster.setFromCamera(aimMouse, camera);
+  if (!aimRaycaster.ray.intersectPlane(aimPlane, aimPoint)) return;
+  if (!game || !game.balls[0]) return;
+  if (game.balls[0].showcase || game.balls[0].aimLocked) return;
+
+  game.balls[0].setAimToward(aimPoint);
+}
+
 function draw() {
   stats.begin();
-  
-  // Controls
-  controls.target.copy(game.balls[0].mesh.position);
-  controls.update();
+
+  // Keep the overhead camera fixed on the table
+  camera.position.set(0, CAMERA_HEIGHT, 0.5);
+  camera.lookAt(controls.target);
 
   // Physics world
   world.step(w.fixedTimeStep);
@@ -142,12 +197,15 @@ function draw() {
   stats.end();
   requestAnimationFrame(draw);
   renderer.render(scene, camera); // We render our scene with our camera
+  if (typeof WhiteBall !== 'undefined' && WhiteBall._overlay && WhiteBall._overlay.active) {
+    WhiteBall._overlay.renderer.render(WhiteBall._overlay.scene, WhiteBall._overlay.camera);
+  }
 }
 
 // Adds an ambient light and two spotlights above the table
 function addLights() {
-  var light = new THREE.AmbientLight(0x0d0d0d); // soft white ambient light
-  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x3a3a3a));
+  scene.add(new THREE.HemisphereLight(0xdfe3ea, 0x1a1c20, 0.35));
   var tableLight1 = new TableLight( Table.LEN_X / 4, 150, 0);
   var tableLight2 = new TableLight(-Table.LEN_X / 4, 150, 0);
 }
