@@ -526,10 +526,26 @@ html, body {
 #lobby.is-entering .city-card:nth-child(7) { animation-delay: 0.3s; }
 #lobby.is-entering .city-card:nth-child(8) { animation-delay: 0.35s; }
 
+.city-stage,
+.lobby-kicker,
+.map-credit {
+  transition: opacity 0.5s ease, visibility 0s linear 0s;
+}
+
+#lobby.is-searching .city-stage,
+#lobby.is-searching .lobby-kicker,
+#lobby.is-searching .map-credit {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+}
+
 .lobby-back {
   position: absolute;
   top: 22px;
   left: 22px;
+  z-index: 5;
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: transparent;
   color: #f2f2f2;
@@ -683,8 +699,108 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(8, 10, 12, 0.72);
+  background: transparent;
   text-align: center;
+  animation: searchIn 0.45s ease 0.32s both;
+}
+
+.search-versus {
+  display: flex;
+  align-items: center;
+  gap: 42px;
+  margin: 22px 0 8px;
+}
+
+.search-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 120px;
+}
+
+.search-seat span {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(244, 247, 246, 0.78);
+}
+
+.search-face {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: #14181c;
+  position: relative;
+}
+
+.search-portrait {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.search-face canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.search-vs {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(244, 247, 246, 0.45);
+}
+
+.search-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-ring {
+  position: absolute;
+  inset: -10px;
+  width: calc(100% + 20px);
+  height: calc(100% + 20px);
+  animation: searchSpin 1.05s linear infinite;
+}
+
+.search-ring circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 36 140;
+}
+
+.search-silhouette {
+  width: 46px;
+  height: 46px;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  animation: searchPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes searchIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes searchSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes searchPulse {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 1; }
 }
 
 .match-search-kicker {

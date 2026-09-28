@@ -193,7 +193,7 @@ function draw() {
 
   // Physics world
   var watching = typeof gui !== 'undefined' && gui.live && gui.live.on && !gui.live.host;
-  if (!watching) world.step(w.fixedTimeStep);
+  if (!watching || (typeof Live !== 'undefined' && Live.predicting)) world.step(w.fixedTimeStep);
 
   // THREE objects
   var dt = clock.getDelta();

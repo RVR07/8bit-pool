@@ -194,6 +194,11 @@ GameGui.prototype.queueMatch = function (id) {
   var status = document.getElementById('matchSearchStatus');
   if (title) title.textContent = GameGui.CITY_NAMES[id] || id;
   if (status) status.textContent = 'Looking for a connected player';
+  var face = document.getElementById('search_face');
+  var label = document.getElementById('search_name');
+  if (face) Wallet.drawFace(face, address);
+  if (label) label.textContent = Wallet.short(address);
+  this.setSearching(true);
   this.show(document.getElementById('matchSearch'));
   function poll() {
     if (self.matchToken !== token) return;
@@ -262,6 +267,7 @@ GameGui.prototype.finishSearch = function (id, opponent, opponentCue, sessionId,
     this.matchTimer = null;
   }
   this.hide(document.getElementById('matchSearch'));
+  this.setSearching(false);
   this.startCity(id, opponent, opponentCue, sessionId, seat);
 };
 
@@ -272,6 +278,7 @@ GameGui.prototype.cancelMatch = function () {
     this.matchTimer = null;
   }
   this.hide(document.getElementById('matchSearch'));
+  this.setSearching(false);
   if (typeof Wallet !== 'undefined' && Wallet.account) {
     fetch('/api/match?address=' + encodeURIComponent(Wallet.account), { method: 'DELETE' }).catch(function () {});
   }
@@ -604,6 +611,13 @@ GameGui.removeClass = function (el, className) {
   } else {
     el.className = el.className.replace(new RegExp('(^|\\b)' + className.split(' ').join('|') + '(\\b|$)', 'gi'), ' ');
   }
+};
+
+GameGui.prototype.setSearching = function (on) {
+  var lobby = document.getElementById('lobby');
+  if (!lobby) return;
+  if (on) GameGui.addClass(lobby, 'is-searching');
+  else GameGui.removeClass(lobby, 'is-searching');
 };
 
 GameGui.prototype.show = function (node) {

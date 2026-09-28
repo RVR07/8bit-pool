@@ -25,7 +25,8 @@ Live.db = function (path, options) {
     headers: headers,
     body: options && options.body ? JSON.stringify(options.body) : undefined
   }).then(function (res) {
-    return res.json().then(function (data) {
+    return res.text().then(function (text) {
+      var data = text ? JSON.parse(text) : null;
       if (!res.ok) throw new Error((data && (data.message || data.error)) || 'live failed');
       return data;
     });
@@ -44,17 +45,27 @@ Live.prepare = function (sessionId, seat) {
   this.applied = {};
   this.sending = false;
   this.again = false;
+  this.outSeq = 0;
+  this.seenSeq = 0;
+  this.predicting = false;
+  this.snapInflight = 0;
+  this.snapAgain = false;
   if (typeof gui !== 'undefined' && gui) gui.live = this;
   var self = this;
   this.db('/rest/v1/billiards_sessions', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=minimal',
     body: { id: sessionId }
-  }).catch(function () {}).then(function () { self.kick(); });
+  }).catch(function () {}).then(function () {
+    self.kick();
+    self.listen();
+  });
 };
 
 Live.stop = function () {
   this.on = false;
+  this.predicting = false;
+  this.unlisten();
   if (this.timer) {
     clearTimeout(this.timer);
     this.timer = null;
@@ -91,7 +102,9 @@ Live.sendShot = function (strength) {
   };
   this.shotPending = true;
   if (typeof eightballgame !== 'undefined' && eightballgame) eightballgame.state = 'turnwaiting';
+  this.beginPredict(strength);
   if (gui && gui.syncHitButton) gui.syncHitButton();
+  this.sync();
 };
 
 Live.myTurn = function () {
@@ -110,8 +123,6 @@ Live.sync = function () {
   this.sending = true;
   var patch = this.host ? { ready1: true } : { ready2: true };
   if (this.host) {
-    var snap = this.capture();
-    if (snap) patch.snapshot = snap;
     if (this.clearShot) {
       patch.shot = null;
       this.clearShot = false;
@@ -178,7 +189,9 @@ Live.capture = function () {
     ]);
   }
   var cue = game.balls[0];
+  this.outSeq = (this.outSeq || 0) + 1;
   return {
+    seq: this.outSeq,
     balls: balls,
     moving: moving || !!cue.cueAnimating,
     turn: eightballgame.turn,
@@ -241,22 +254,44 @@ Live.takeShots = function (shots) {
 
 Live.applySnapshot = function (snap) {
   if (!snap || !game || !game.balls || !snap.balls) return;
-  if (this.targets) this.prev = this.targets;
-  this.targets = snap.balls;
-  this.blendAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (snap.seq != null && snap.seq <= this.seenSeq) return;
+  if (snap.seq != null) this.seenSeq = snap.seq;
+  var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   this.clock = {
     left: Number(snap.timer) || 0,
-    at: this.blendAt,
+    at: now,
     counting: snap.state === 'turn'
   };
+  if (this.predicting) {
+    this.pendingSnap = snap;
+    var settled = snap.seq > this.predictSeq && !snap.moving && (snap.state === 'turn' || snap.state === 'gameover' || snap.gameover);
+    if (!settled) return;
+    this.prev = this.sampleMeshes();
+    this.predicting = false;
+    this.blendAt = now;
+    this.blendMs = 200;
+    this.settling = true;
+    this.freshBlend = true;
+  }
+  if (!this.freshBlend) {
+    this.prev = this.sampleMeshes();
+    var gap = this.lastSnapAt ? now - this.lastSnapAt : 50;
+    this.blendMs = Math.max(32, Math.min(gap, 140));
+    this.blendAt = now;
+  }
+  this.freshBlend = false;
+  this.lastSnapAt = now;
+  this.targets = snap.balls;
   var mine = this.seat === (eightballgame && eightballgame.turn);
   for (var i = 0; i < game.balls.length && i < snap.balls.length; i++) {
     var ball = game.balls[i];
     ball.remote = true;
-    ball.remoteMoving = !!snap.moving;
+    ball.remoteMoving = !!snap.moving || !!this.settling;
     if (snap.balls[i][7] && ball.name !== 'whiteball') {
       ball.fallen = true;
       ball.mesh.visible = false;
+    } else if (ball.name !== 'whiteball') {
+      ball.fallen = false;
     }
   }
   var cue = game.balls[0];
@@ -301,12 +336,25 @@ Live.applySnapshot = function (snap) {
 Live.frame = function () {
   if (!this.on) return;
   var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-  if (!this.sentAt || now - this.sentAt > 40) {
+  if (this.host && (!this.snapAt || now - this.snapAt > 40)) {
+    this.snapAt = now;
+    this.pushSnap();
+  }
+  if (!this.sentAt || now - this.sentAt > 100) {
     this.sentAt = now;
     this.sync();
   }
   if (this.host) {
     if (gui && eightballgame && eightballgame.timerLeft) gui.paintClock(eightballgame.timerLeft());
+    return;
+  }
+  if (this.predicting && this.predictAt && now - this.predictAt > 12000) {
+    var pending = this.pendingSnap;
+    this.predicting = false;
+    if (pending) this.applySnapshot(pending);
+  }
+  if (this.predicting) {
+    this.paintGuestClock(now);
     return;
   }
   this.paintBalls();
@@ -321,21 +369,27 @@ Live.paintGuestClock = function (now) {
 };
 
 Live.paintBalls = function () {
-  if (!this.targets || !game || !game.balls) return;
+  if (this.predicting || !this.targets || !game || !game.balls) return;
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   var t = 1;
   if (this.prev && this.prev.length === this.targets.length) {
-    t = Math.min(1, ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.blendAt) / 50);
+    t = (now - this.blendAt) / (this.blendMs || 50);
+    if (t < 0) t = 0;
+    if (t > 1.12) t = 1.12;
   }
+  if (this.settling && t >= 1) this.settling = false;
   for (var i = 0; i < game.balls.length && i < this.targets.length; i++) {
     var ball = game.balls[i];
     var row = this.targets[i];
     var prev = this.prev && this.prev[i];
     ball.remote = true;
+    if (this.settling) ball.remoteMoving = true;
     if (row[7] && ball.name !== 'whiteball') {
       ball.fallen = true;
       ball.mesh.visible = false;
       continue;
     }
+    if (ball.name !== 'whiteball') ball.fallen = false;
     ball.mesh.visible = true;
     var x = row[0];
     var y = row[1];
@@ -344,11 +398,178 @@ Live.paintBalls = function () {
       x = prev[0] + (row[0] - prev[0]) * t;
       y = prev[1] + (row[1] - prev[1]) * t;
       z = prev[2] + (row[2] - prev[2]) * t;
+      var qa = this.qa || (this.qa = new THREE.Quaternion());
+      var qb = this.qb || (this.qb = new THREE.Quaternion());
+      qa.set(prev[3], prev[4], prev[5], prev[6]);
+      qb.set(row[3], row[4], row[5], row[6]);
+      ball.mesh.quaternion.copy(qa).slerp(qb, t);
+    } else {
+      ball.mesh.quaternion.set(row[3], row[4], row[5], row[6]);
     }
     ball.mesh.position.set(x, y, z);
-    ball.mesh.quaternion.set(row[3], row[4], row[5], row[6]);
   }
 };
+
+Live.pushSnap = function () {
+  if (!this.on || !this.host || !this.sessionId) return;
+  if (this.snapInflight >= 3) {
+    this.snapAgain = true;
+    return;
+  }
+  var snap = this.capture();
+  if (!snap) return;
+  this.snapInflight++;
+  var self = this;
+  this.db('/rest/v1/rpc/billiards_snap', {
+    method: 'POST',
+    prefer: 'return=minimal',
+    body: { p_id: this.sessionId, p_snapshot: snap }
+  }).then(function () {
+    self.snapInflight--;
+    if (self.on && self.snapAgain) {
+      self.snapAgain = false;
+      self.pushSnap();
+    }
+  }).catch(function () {
+    self.snapInflight--;
+  });
+};
+
+Live.beginPredict = function (strength) {
+  if (!game || !game.balls || !game.balls[0]) return;
+  var cue = game.balls[0];
+  if (cue.aimBlocked || cue.cueAnimating) return;
+  this.plantBodies();
+  if (cue.rigidBody.sleepState !== CANNON.Body.SLEEPING) cue.rigidBody.sleep();
+  game.ballHit(strength);
+  if (!cue.cueAnimating) {
+    this.releasePredict();
+    return;
+  }
+  this.predicting = true;
+  this.predictSeq = this.seenSeq || 0;
+  this.predictAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  this.pendingSnap = null;
+};
+
+Live.releasePredict = function () {
+  this.predicting = false;
+  if (!game || !game.balls) return;
+  for (var i = 0; i < game.balls.length; i++) game.balls[i].remote = true;
+};
+
+Live.plantBodies = function () {
+  for (var i = 0; i < game.balls.length; i++) {
+    var ball = game.balls[i];
+    var body = ball.rigidBody;
+    var p = ball.mesh.position;
+    var q = ball.mesh.quaternion;
+    var y = (ball.fallen && ball.name !== 'whiteball') ? -80 : p.y;
+    body.velocity.set(0, 0, 0);
+    body.angularVelocity.set(0, 0, 0);
+    body.position.set(p.x, y, p.z);
+    if (body.previousPosition) body.previousPosition.set(p.x, y, p.z);
+    body.quaternion.x = q.x;
+    body.quaternion.y = q.y;
+    body.quaternion.z = q.z;
+    body.quaternion.w = q.w;
+    ball.remote = false;
+    ball.remoteMoving = false;
+    body.sleep();
+  }
+};
+
+Live.sampleMeshes = function () {
+  var out = [];
+  if (!game || !game.balls) return out;
+  for (var i = 0; i < game.balls.length; i++) {
+    var ball = game.balls[i];
+    var p = ball.mesh.position;
+    var q = ball.mesh.quaternion;
+    out.push([p.x, p.y, p.z, q.x, q.y, q.z, q.w, ball.fallen && ball.name !== 'whiteball' ? 1 : 0]);
+  }
+  return out;
+};
+
+Live.listen = function () {
+  this.unlisten();
+  if (!this.on || !this.sessionId || typeof WebSocket === 'undefined') return;
+  var self = this;
+  var url = this.dbUrl.replace('https://', 'wss://') + '/realtime/v1/websocket?apikey=' + encodeURIComponent(this.dbKey) + '&vsn=1.0.0';
+  var ws = new WebSocket(url);
+  this.socket = ws;
+  var ref = 0;
+  ws.onopen = function () {
+    var joinRef = String(++ref);
+    ws.send(JSON.stringify({
+      topic: 'realtime:billiards:' + self.sessionId,
+      event: 'phx_join',
+      payload: {
+        config: {
+          broadcast: { ack: false, self: false },
+          presence: { key: '' },
+          postgres_changes: [{
+            event: '*',
+            schema: 'public',
+            table: 'billiards_sessions',
+            filter: 'id=eq.' + self.sessionId
+          }]
+        },
+        access_token: self.dbKey
+      },
+      ref: joinRef,
+      join_ref: joinRef
+    }));
+    self.pulse = setInterval(function () {
+      if (!self.socket || self.socket.readyState !== 1) return;
+      self.socket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(++ref) }));
+    }, 25000);
+  };
+  ws.onmessage = function (event) {
+    var msg;
+    try { msg = JSON.parse(event.data); } catch (e) { return; }
+    if (!msg || msg.event !== 'postgres_changes') return;
+    var row = liveRow(msg.payload);
+    if (row && row.id === self.sessionId) self.consume(row);
+  };
+  ws.onclose = function () {
+    if (self.pulse) {
+      clearInterval(self.pulse);
+      self.pulse = null;
+    }
+    if (!self.on || self.socket !== ws) return;
+    self.socket = null;
+    setTimeout(function () { if (self.on) self.listen(); }, 1000);
+  };
+};
+
+Live.unlisten = function () {
+  if (this.pulse) {
+    clearInterval(this.pulse);
+    this.pulse = null;
+  }
+  if (!this.socket) return;
+  var ws = this.socket;
+  this.socket = null;
+  ws.onclose = null;
+  try { ws.close(); } catch (e) {}
+};
+
+function liveRow(payload) {
+  var data = payload && (payload.data || payload);
+  var row = data && (data.record || data.new || null);
+  if (!row || !row.id) return null;
+  if (typeof row.snapshot === 'string') {
+    try { row.snapshot = JSON.parse(row.snapshot); } catch (e) { row.snapshot = null; }
+  }
+  if (typeof row.shot === 'string') {
+    try { row.shot = JSON.parse(row.shot); } catch (e) { row.shot = null; }
+  }
+  if (typeof row.aim2 === 'string') {
+    try { row.aim2 = JSON.parse(row.aim2); } catch (e) { row.aim2 = null; }
+  }
+  return row;
+}
 
 function round2(value) {
   return Math.round(value * 100) / 100;
