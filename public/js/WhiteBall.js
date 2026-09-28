@@ -20,17 +20,15 @@ var WhiteBall = function (x, y, z) {
   this.showcase = false;
   this.cue = this.createCue();
   scene.add(this.cue);
-  this.forwardLine = this.createGuideLine(0xffffff, 0.42);
-  this.forwardCap = this.createCap(0xffffff, 0.42);
+  this.forwardLine = this.createGuideLine(0xffffff, 1.35);
+  this.forwardCap = this.createCap(0xffffff, 0.68);
   scene.add(this.forwardLine);
   scene.add(this.forwardCap);
 
-  this.objectLine = this.createGuideLine(0xffd84a, 0.55);
-  this.objectCap = this.createCap(0xffd84a, 0.36);
+  this.objectLine = this.createGuideLine(0x5ef2c5, 1.15);
+  this.objectCap = this.createCap(0x5ef2c5, 0.58);
   scene.add(this.objectLine);
   scene.add(this.objectCap);
-  this.targetRing = this.createTargetRing();
-  scene.add(this.targetRing);
   var savedStyle = WhiteBall.cueById(this.cueId);
   if (savedStyle && savedStyle.line) this.setGuideColor(savedStyle.line);
 
@@ -156,7 +154,6 @@ WhiteBall.prototype.hideGuides = function () {
   this.forwardCap.visible = false;
   this.objectLine.visible = false;
   this.objectCap.visible = false;
-  if (this.targetRing) this.targetRing.visible = false;
   this.dot.visible = false;
 };
 
@@ -256,7 +253,7 @@ WhiteBall.prototype.placeCue = function (gap) {
   this.cue.position.copy(this.mesh.position);
   this.cue.position.x -= this.forward.x * (Ball.RADIUS + gap);
   this.cue.position.z -= this.forward.z * (Ball.RADIUS + gap);
-  this.cue.position.y = this.mesh.position.y + 0.35;
+  this.cue.position.y = this.mesh.position.y + 4;
   this.cue.rotation.y = this.aimAngle;
 };
 
@@ -710,16 +707,16 @@ WhiteBall.prototype.updateGuideLine = function () {
   if (!hit) {
     this.objectLine.visible = false;
     this.objectCap.visible = false;
-    if (this.targetRing) this.targetRing.visible = false;
     this.intersectionPoint = this.forwardLine.ray.intersectBox(this.forwardLine.box, this.lineEnd);
   } else {
+    // Draw the cue line up to the ball it touches. Thin cuts only meet the
+    // collision sphere, so the line stops where the cue center will be.
     this.hitSphere.radius = Ball.RADIUS;
     this.hitSphere.center.copy(hit.ball.mesh.position);
     var touch = this.forwardLine.ray.intersectSphere(this.hitSphere, this.ghostPoint);
     this.hitSphere.radius = Ball.RADIUS * 2;
     this.intersectionPoint = touch ? this.lineEnd.copy(touch) : this.lineEnd.copy(hit.ghost);
     this.updateObjectLine(hit.ball, hit.ghost);
-    this.showTargetRing(hit.ball);
   }
 
   var distance = this.intersectionPoint
@@ -732,32 +729,8 @@ WhiteBall.prototype.updateGuideLine = function () {
   this.forwardCap.position.x += this.forward.x * distance;
   this.forwardCap.position.z += this.forward.z * distance;
   this.forwardCap.position.y = this.mesh.position.y;
-  this.forwardCap.visible = !hit;
+  this.forwardCap.visible = true;
   this.setGuideDim(hit && this.aimIsBlocked(hit.ball));
-};
-
-WhiteBall.prototype.showTargetRing = function (ball) {
-  if (!this.targetRing || !ball) return;
-  this.targetRing.visible = true;
-  this.targetRing.position.copy(ball.mesh.position);
-  this.targetRing.position.y = ball.mesh.position.y + 0.08;
-};
-
-WhiteBall.prototype.createTargetRing = function () {
-  var ring = new THREE.Mesh(
-    new THREE.RingGeometry(Ball.RADIUS * 1.02, Ball.RADIUS * 1.28, 48),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 1,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.visible = false;
-  ring.renderOrder = 4;
-  return ring;
 };
 
 WhiteBall.prototype.aimIsBlocked = function (ball) {
@@ -788,7 +761,6 @@ WhiteBall.prototype.setGuideDim = function (dim) {
   this.setGroupOpacity(this.forwardCap, opacity);
   this.setGroupOpacity(this.objectLine, opacity);
   this.setGroupOpacity(this.objectCap, opacity);
-  if (this.targetRing && this.targetRing.material) this.targetRing.material.opacity = opacity;
   this.aimBlocked = !!dim;
   var btn = document.getElementById('btn_ball');
   if (!btn) return;
@@ -847,7 +819,6 @@ WhiteBall.prototype.updateObjectLine = function (ball, ghost) {
 
   this.objectDir.normalize();
   var angle = Math.atan2(-this.objectDir.z, this.objectDir.x);
-  var length = Ball.RADIUS * 3.2;
 
   this.objectLine.visible = true;
   this.objectLine.position.copy(ball.mesh.position);
@@ -855,8 +826,20 @@ WhiteBall.prototype.updateObjectLine = function (ball, ghost) {
   this.objectLine.position.y = ball.mesh.position.y;
   this.objectLine.position.z += this.objectDir.z * Ball.RADIUS;
   this.objectLine.rotation.y = angle;
+
+  this.objectRay.origin.copy(ball.mesh.position);
+  this.objectRay.direction.copy(this.objectDir);
+  var cushion = this.objectRay.intersectBox(this.forwardLine.box, this.cushionPoint);
+  var length = cushion
+    ? ball.mesh.position.distanceTo(cushion) - Ball.RADIUS
+    : 40;
+  if (length < 2) length = 2;
+
   this.objectLine.scale.x = length;
-  this.objectCap.visible = false;
+  this.objectCap.position.copy(this.objectLine.position);
+  this.objectCap.position.x += this.objectDir.x * length;
+  this.objectCap.position.z += this.objectDir.z * length;
+  this.objectCap.visible = true;
 };
 
 WhiteBall.prototype.makeRibbon = function (color, width, lift) {
@@ -872,7 +855,10 @@ WhiteBall.prototype.makeRibbon = function (color, width, lift) {
   }));
 };
 
-WhiteBall.prototype.setGuideColor = function () {};
+WhiteBall.prototype.setGuideColor = function (color) {
+  this.paintGuide(this.objectLine, color);
+  this.paintGuide(this.objectCap, color);
+};
 
 WhiteBall.prototype.paintGuide = function (group, color) {
   if (!group || !group.children[1] || !group.children[1].material) return;
