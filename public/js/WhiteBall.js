@@ -834,6 +834,7 @@ WhiteBall.prototype.updateObjectLine = function (ball, ghost) {
     ? ball.mesh.position.distanceTo(cushion) - Ball.RADIUS
     : 40;
   if (length < 2) length = 2;
+  length *= 0.15;
 
   this.objectLine.scale.x = length;
   this.objectCap.position.copy(this.objectLine.position);
