@@ -151,29 +151,100 @@ var aimPoint = new THREE.Vector3();
 
 function setupAimDrag() {
   var canvas = renderer.domElement;
-  canvas.addEventListener('mousemove', aimFromPointer);
-  canvas.addEventListener('mousedown', function (event) {
-    if (event.button !== 0) return;
-    if (!game || !game.balls[0] || game.balls[0].showcase) return;
+  canvas.style.touchAction = 'none';
+  var powerDrag = null;
+  var powerStart = new THREE.Vector3();
+  var powerNow = new THREE.Vector3();
+
+  function canCharge() {
+    if (!game || !game.balls[0] || game.balls[0].showcase || game.balls[0].cueAnimating) return false;
+    if (typeof eightballgame === 'undefined' || !eightballgame || eightballgame.state !== 'turn') return false;
+    if (game.balls[0].rigidBody.sleepState !== CANNON.Body.SLEEPING) return false;
+    if (typeof gui !== 'undefined' && gui.live && gui.live.on && !gui.live.myTurn()) return false;
+    if (game.balls[0].aimBlocked) return false;
+    return true;
+  }
+
+  function pullStrength(event) {
+    if (!tablePointFromEvent(event, powerNow)) return;
     var ball = game.balls[0];
-    if (ball.aimLocked) {
-      ball.aimLocked = false;
-      aimFromPointer(event);
-    } else {
-      aimFromPointer(event);
-      ball.aimLocked = true;
+    if (ball.updateGuideLine) ball.updateGuideLine();
+    var backX = -ball.forward.x;
+    var backZ = -ball.forward.z;
+    var along = (powerNow.x - powerStart.x) * backX + (powerNow.z - powerStart.z) * backZ;
+    if (along < 0) along = 0;
+    var t = along / 46;
+    if (t > 1) t = 1;
+    if (along > 4) powerDrag.pulled = true;
+    if (gui && gui.setStrength) gui.setStrength(10 + t * 90);
+  }
+
+  canvas.addEventListener('pointerdown', function (event) {
+    if (event.button !== 0 && event.pointerType === 'mouse') return;
+    if (!canCharge()) {
+      if (!game || !game.balls[0] || game.balls[0].showcase) return;
+      var ball = game.balls[0];
+      if (ball.aimLocked) {
+        ball.aimLocked = false;
+        aimFromPointer(event);
+      } else {
+        aimFromPointer(event);
+        ball.aimLocked = true;
+      }
+      return;
     }
+    if (!tablePointFromEvent(event, powerStart)) return;
+    powerDrag = { pulled: false };
+    try { canvas.setPointerCapture(event.pointerId); } catch (err) {}
   });
+
+  canvas.addEventListener('pointermove', function (event) {
+    if (powerDrag) {
+      pullStrength(event);
+      return;
+    }
+    aimFromPointer(event);
+  });
+
+  function releaseShot(event) {
+    if (!powerDrag) return;
+    var pulled = powerDrag.pulled;
+    powerDrag = null;
+    if (!pulled) {
+      if (!game || !game.balls[0] || game.balls[0].showcase) return;
+      var ball = game.balls[0];
+      if (ball.aimLocked) {
+        ball.aimLocked = false;
+        aimFromPointer(event);
+      } else {
+        aimFromPointer(event);
+        ball.aimLocked = true;
+      }
+      return;
+    }
+    if (!canCharge() || typeof eightballgame === 'undefined' || !eightballgame) return;
+    if (typeof Sound !== 'undefined') Sound.ensure();
+    var strength = game.balls[0].cueStrength;
+    eightballgame.hitButtonClicked(strength);
+  }
+
+  window.addEventListener('pointerup', releaseShot);
+  window.addEventListener('pointercancel', function () { powerDrag = null; });
+}
+
+function tablePointFromEvent(event, out) {
+  var rect = renderer.domElement.getBoundingClientRect();
+  var point = event;
+  if (event.touches && event.touches[0]) point = event.touches[0];
+  aimMouse.x = ((point.clientX - rect.left) / rect.width) * 2 - 1;
+  aimMouse.y = -((point.clientY - rect.top) / rect.height) * 2 + 1;
+  camera.updateMatrixWorld();
+  aimRaycaster.setFromCamera(aimMouse, camera);
+  return aimRaycaster.ray.intersectPlane(aimPlane, out);
 }
 
 function aimFromPointer(event) {
-  var rect = renderer.domElement.getBoundingClientRect();
-  aimMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  aimMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-  camera.updateMatrixWorld();
-  aimRaycaster.setFromCamera(aimMouse, camera);
-  if (!aimRaycaster.ray.intersectPlane(aimPlane, aimPoint)) return;
+  if (!tablePointFromEvent(event, aimPoint)) return;
   if (!game || !game.balls[0]) return;
   if (typeof gui !== 'undefined' && gui.live && gui.live.on && typeof eightballgame !== 'undefined' && eightballgame && gui.live.seat !== eightballgame.turn) return;
   if (game.balls[0].showcase || game.balls[0].aimLocked) return;

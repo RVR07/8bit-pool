@@ -1,7 +1,7 @@
 var GameGui = function () {
+  var self = this;
   var btn_ball = document.getElementById('btn_ball');
   var strength = document.getElementById('range_strength');
-  var readout = document.getElementById('power_readout');
   function paintStrengthTrack() {
     var min = Number(strength.min);
     var max = Number(strength.max);
@@ -10,24 +10,13 @@ var GameGui = function () {
   }
   paintStrengthTrack();
   strength.addEventListener('input', function () {
-    if (readout) readout.textContent = strength.value;
-    if (game && game.balls[0]) {
-      game.balls[0].cueStrength = Number(strength.value);
-      if (!game.balls[0].cueAnimating && game.balls[0].placeCue) {
-        game.balls[0].placeCue(game.balls[0].cueGap());
-      }
-    }
-    paintStrengthTrack();
-    if (typeof Live !== 'undefined' && gui && gui.live && gui.live.on && gui.live.myTurn() && game && game.balls[0]) {
-      Live.noteAim(game.balls[0].aimAngle, Number(strength.value));
-    }
+    self.setStrength(strength.value);
   });
   btn_ball.onclick = function () {
     if (typeof Sound !== 'undefined') Sound.ensure();
     eightballgame.hitButtonClicked(Number(strength.value));
   };
   var cards = document.querySelectorAll('#lobby .city-card');
-  var self = this;
   this.cityIndex = 0;
   var arrows = document.querySelectorAll('#lobby .city-arrow');
   for (var n = 0; n < arrows.length; n++) {
@@ -125,6 +114,30 @@ GameGui.prototype.closeLobby = function () {
   GameGui.removeClass(lobby, 'is-entering');
   this.hide(lobby);
   this.show(menu);
+};
+
+GameGui.prototype.setStrength = function (value) {
+  var strength = document.getElementById('range_strength');
+  var readout = document.getElementById('power_readout');
+  value = Math.round(Number(value));
+  if (value < 10) value = 10;
+  if (value > 100) value = 100;
+  if (strength) {
+    strength.value = String(value);
+    var min = Number(strength.min) || 10;
+    var max = Number(strength.max) || 100;
+    var pct = ((value - min) / (max - min)) * 100;
+    strength.style.setProperty('--fill', pct + '%');
+  }
+  if (readout) readout.textContent = String(value);
+  if (game && game.balls && game.balls[0]) {
+    var ball = game.balls[0];
+    ball.cueStrength = value;
+    if (!ball.cueAnimating && ball.placeCue) ball.placeCue(ball.cueGap());
+  }
+  if (typeof Live !== 'undefined' && this.live && this.live.on && this.live.myTurn() && game && game.balls[0]) {
+    Live.noteAim(game.balls[0].aimAngle, value);
+  }
 };
 
 GameGui.prototype.showCity = function () {
