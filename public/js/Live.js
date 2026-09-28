@@ -10,6 +10,28 @@ var Live = {
   timer: null
 };
 
+Live.dbUrl = 'https://fhmzewpqvblncczeklty.supabase.co';
+Live.dbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZobXpld3BxdmJsbmNjemVrbHR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NzgxNjMsImV4cCI6MjEwNTE1NDE2M30.Ur5lTstsobtj5Q0nzxXItTpkZzvzRj5VPoRS2jHWjOc';
+
+Live.db = function (path, options) {
+  var headers = {
+    apikey: Live.dbKey,
+    Authorization: 'Bearer ' + Live.dbKey,
+    'Content-Type': 'application/json'
+  };
+  if (options && options.prefer) headers.Prefer = options.prefer;
+  return fetch(Live.dbUrl + path, {
+    method: options && options.method ? options.method : 'GET',
+    headers: headers,
+    body: options && options.body ? JSON.stringify(options.body) : undefined
+  }).then(function (res) {
+    return res.json().then(function (data) {
+      if (!res.ok) throw new Error((data && (data.message || data.error)) || 'live failed');
+      return data;
+    });
+  });
+};
+
 Live.prepare = function (sessionId, seat) {
   this.stop();
   this.on = true;
@@ -20,8 +42,15 @@ Live.prepare = function (sessionId, seat) {
   this.announced = false;
   this.aim = null;
   this.applied = {};
+  this.sending = false;
+  this.again = false;
   if (typeof gui !== 'undefined' && gui) gui.live = this;
-  this.kick();
+  var self = this;
+  this.db('/rest/v1/billiards_sessions', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: { id: sessionId }
+  }).catch(function () {}).then(function () { self.kick(); });
 };
 
 Live.stop = function () {
@@ -39,7 +68,7 @@ Live.kick = function () {
   var tick = function () {
     if (!self.on) return;
     self.sync().catch(function () {});
-    self.timer = setTimeout(tick, 50);
+    self.timer = setTimeout(tick, 200);
   };
   tick();
 };
@@ -72,39 +101,64 @@ Live.myTurn = function () {
 
 Live.sync = function () {
   var self = this;
-  if (!this.on || typeof Wallet === 'undefined' || !Wallet.account) return Promise.resolve();
-  var body = {
-    address: Wallet.account,
-    sessionId: this.sessionId,
-    ready: true
-  };
-  if (this.aim && this.myTurn()) body.aim = this.aim;
-  if (this.shot) {
-    body.shot = this.shot;
-    this.shot = null;
+  if (!this.on || !this.sessionId) return Promise.resolve();
+  if (this.sending) {
+    this.again = true;
+    return Promise.resolve();
   }
+  this.sending = true;
+  var patch = this.host ? { ready1: true } : { ready2: true };
   if (this.host) {
-    body.snapshot = this.capture();
-    body.applied = Object.keys(this.applied);
+    var snap = this.capture();
+    if (snap) patch.snapshot = snap;
+    if (this.clearShot) {
+      patch.shot = null;
+      this.clearShot = false;
+    }
+  } else {
+    if (this.aim && this.myTurn()) patch.aim2 = this.aim;
+    if (this.shot) {
+      patch.shot = this.shot;
+      this.shot = null;
+    }
   }
-  return fetch('/api/live', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(function (res) { return res.json(); }).then(function (data) {
-    if (!self.on || !data || data.error) return;
-    self.opponentReady = !!data.opponentReady;
-    if (self.opponentReady && !self.announced && gui) {
-      self.announced = true;
+  return this.db('/rest/v1/billiards_sessions?id=eq.' + encodeURIComponent(this.sessionId), {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: patch
+  }).then(function (rows) {
+    self.sending = false;
+    var row = rows && rows[0];
+    if (row) self.consume(row);
+    if (self.on && self.again) {
+      self.again = false;
+      return self.sync();
+    }
+  }).catch(function () {
+    self.sending = false;
+  });
+};
+
+Live.consume = function (row) {
+  if (this.host) {
+    this.opponentReady = !!row.ready2;
+    if (this.opponentReady && !this.announced && gui) {
+      this.announced = true;
       gui.log('Opponent connected');
     }
-    if (self.host) {
-      self.takeShots(data.shots || []);
-      self.showOpponentAim(data.aim);
-    } else if (data.snapshot) {
-      self.applySnapshot(data.snapshot);
+    if (row.shot && row.shot.id && !this.applied[row.shot.id]) {
+      this.takeShots([row.shot]);
+      this.clearShot = true;
     }
-  });
+    this.showOpponentAim(row.aim2);
+    return;
+  }
+  this.opponentReady = !!row.ready1;
+  if (this.opponentReady && !this.announced && gui) {
+    this.announced = true;
+    gui.log('Opponent connected');
+  }
+  if (row.snapshot && row.snapshot.balls) this.applySnapshot(row.snapshot);
 };
 
 Live.capture = function () {
@@ -134,7 +188,7 @@ Live.capture = function () {
       player2: eightballgame.sides.player2
     },
     onTable: eightballgame.numbered_balls_on_table.slice(),
-    timer: eightballgame.timer,
+    timer: eightballgame.timerLeft ? eightballgame.timerLeft() : (eightballgame.timer || 0),
     aim: cue.aimAngle,
     pull: cue.cuePull != null ? cue.cuePull : cue.cueGap(),
     strength: cue.cueStrength,
@@ -173,34 +227,32 @@ Live.takeShots = function (shots) {
 
 Live.applySnapshot = function (snap) {
   if (!snap || !game || !game.balls || !snap.balls) return;
+  if (this.targets) this.prev = this.targets;
+  this.targets = snap.balls;
+  this.blendAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  this.clock = {
+    left: Number(snap.timer) || 0,
+    at: this.blendAt,
+    counting: snap.state === 'turn'
+  };
   var mine = this.seat === (eightballgame && eightballgame.turn);
   for (var i = 0; i < game.balls.length && i < snap.balls.length; i++) {
     var ball = game.balls[i];
-    var row = snap.balls[i];
-    if (row[7] && ball.name !== 'whiteball') {
+    ball.remote = true;
+    ball.remoteMoving = !!snap.moving;
+    if (snap.balls[i][7] && ball.name !== 'whiteball') {
       ball.fallen = true;
       ball.mesh.visible = false;
-      continue;
     }
-    ball.rigidBody.position.set(row[0], row[1], row[2]);
-    ball.rigidBody.quaternion.x = row[3];
-    ball.rigidBody.quaternion.y = row[4];
-    ball.rigidBody.quaternion.z = row[5];
-    ball.rigidBody.quaternion.w = row[6];
-    ball.mesh.position.set(row[0], row[1], row[2]);
-    ball.mesh.quaternion.set(row[3], row[4], row[5], row[6]);
-    ball.rigidBody.velocity.set(0, 0, 0);
-    ball.rigidBody.angularVelocity.set(0, 0, 0);
   }
   var cue = game.balls[0];
-  if (snap.moving) cue.rigidBody.wakeUp();
-  else cue.rigidBody.sleep();
   cue.useRemoteCue = !mine;
   if (!mine) {
     cue.aimAngle = snap.aim;
     cue.cueStrength = snap.strength;
     cue.remotePull = snap.pull;
   }
+  this.paintBalls();
   if (!eightballgame) return;
   var accept = !(this.shotPending && snap.turn === this.seat && snap.state === 'turn' && !snap.moving);
   if (accept) this.shotPending = false;
@@ -230,6 +282,58 @@ Live.applySnapshot = function (snap) {
     if (gui) gui.showEndGame(snap.winner || 'Player 2');
   }
   if (gui && gui.syncHitButton) gui.syncHitButton();
+};
+
+Live.frame = function () {
+  if (!this.on) return;
+  var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (!this.sentAt || now - this.sentAt > 40) {
+    this.sentAt = now;
+    this.sync();
+  }
+  if (this.host) {
+    if (gui && eightballgame && eightballgame.timerLeft) gui.paintClock(eightballgame.timerLeft());
+    return;
+  }
+  this.paintBalls();
+  this.paintGuestClock(now);
+};
+
+Live.paintGuestClock = function (now) {
+  if (!this.clock || !gui || !gui.paintClock) return;
+  var left = this.clock.left;
+  if (this.clock.counting) left -= (now - this.clock.at) / 1000;
+  gui.paintClock(left);
+};
+
+Live.paintBalls = function () {
+  if (!this.targets || !game || !game.balls) return;
+  var t = 1;
+  if (this.prev && this.prev.length === this.targets.length) {
+    t = Math.min(1, ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.blendAt) / 50);
+  }
+  for (var i = 0; i < game.balls.length && i < this.targets.length; i++) {
+    var ball = game.balls[i];
+    var row = this.targets[i];
+    var prev = this.prev && this.prev[i];
+    ball.remote = true;
+    if (row[7] && ball.name !== 'whiteball') {
+      ball.fallen = true;
+      ball.mesh.visible = false;
+      continue;
+    }
+    ball.mesh.visible = true;
+    var x = row[0];
+    var y = row[1];
+    var z = row[2];
+    if (prev && t < 1) {
+      x = prev[0] + (row[0] - prev[0]) * t;
+      y = prev[1] + (row[1] - prev[1]) * t;
+      z = prev[2] + (row[2] - prev[2]) * t;
+    }
+    ball.mesh.position.set(x, y, z);
+    ball.mesh.quaternion.set(row[3], row[4], row[5], row[6]);
+  }
 };
 
 function round2(value) {

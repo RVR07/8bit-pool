@@ -617,10 +617,17 @@ GameGui.prototype.play8BallClicked = function () {
 };
 
 GameGui.prototype.UpdateTimer = function(timerVal) {
-  document.getElementsByClassName('timer')[0].textContent = timerVal;
-  var active = document.querySelector('.player.active .avatar-wrap');
-  if (active) {
-    active.style.setProperty('--remain', Math.max(timerVal, 0) / 30);
+  this.paintClock(timerVal);
+};
+
+GameGui.prototype.paintClock = function (timerVal) {
+  var shown = Math.max(0, Math.ceil(Number(timerVal) || 0));
+  var node = document.querySelector('#controlsHud .clock .timer');
+  if (node) node.textContent = shown;
+  var wraps = document.querySelectorAll('#controlsHud .avatar-wrap');
+  var active = document.querySelector('#controlsHud .player.active .avatar-wrap');
+  for (var i = 0; i < wraps.length; i++) {
+    wraps[i].style.setProperty('--remain', wraps[i] === active ? Math.max(Number(timerVal) || 0, 0) / 30 : 1);
   }
 };
 

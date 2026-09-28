@@ -198,6 +198,7 @@ function draw() {
   // THREE objects
   var dt = clock.getDelta();
   game.tick(dt);
+  if (typeof Live !== 'undefined' && Live.on) Live.frame();
 
   stats.end();
   requestAnimationFrame(draw);

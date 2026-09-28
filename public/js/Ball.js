@@ -93,6 +93,7 @@ Ball.prototype.createMesh = function (x,y,z) {
 };
 
 Ball.prototype.tick = function (dt) {
+  if (this.remote) return;
   this.mesh.position.copy(this.rigidBody.position);
   this.mesh.quaternion.copy(this.rigidBody.quaternion);
 

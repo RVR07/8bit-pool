@@ -80,8 +80,20 @@ WhiteBall.prototype.onEnterHole = function () {
 };
 
 WhiteBall.prototype.tick = function (dt) {
-  //Superclass tick behaviour:
   Ball.prototype.tick.apply(this, arguments);
+  if (this.remote) {
+    if (this.remoteMoving) {
+      this.hideGuides();
+      if (!this.cueAnimating) this.cue.visible = false;
+    } else if (!this.showcase && !this.cueAnimating) {
+      this.forwardLine.visible = true;
+      this.dot.visible = true;
+      this.updateGuideLine();
+      this.updateIntersectionDot();
+      this.placeCue(this.remotePull != null ? this.remotePull : this.cueGap());
+    }
+    return;
+  }
 
   if (this.showcase) {
     this.hideGuides();

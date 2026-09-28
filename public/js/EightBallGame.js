@@ -38,6 +38,7 @@ EightBallGame.prototype.startTurn = function () {
   }
   // enable movement
   eightballgame.timer = 30;
+  eightballgame.timerMark = Date.now();
   eightballgame.state = 'turn';
   gui.updateTurn(eightballgame.turn);
   gui.updateBalls(eightballgame.numbered_balls_on_table, eightballgame.sides.player1, eightballgame.sides.player2);
@@ -92,7 +93,14 @@ EightBallGame.prototype.coloredBallEnteredHole = function (name) {
   gui.updateBalls(eightballgame.numbered_balls_on_table, eightballgame.sides.player1, eightballgame.sides.player2);
 }
 
+EightBallGame.prototype.timerLeft = function () {
+  if (this.state !== 'turn') return this.timer || 0;
+  var mark = this.timerMark || Date.now();
+  return Math.max(0, (this.timer || 0) - (Date.now() - mark) / 1000);
+};
+
 EightBallGame.prototype.tickTimer = function () {
+  eightballgame.timerMark = Date.now();
   gui.UpdateTimer(eightballgame.timer);
   if (eightballgame.timer == 0) {
     gui.log(eightballgame.turn + " ran out of time");
