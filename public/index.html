@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Bodoni+Moda:opsz,wght@6..96,500&family=Cinzel:wght@500&family=Fraunces:opsz,wght@9..144,500&family=Italiana&family=Shippori+Mincho:wght@500&display=swap">
-    <link rel="stylesheet" href="styles.css?v=search">
+    <link rel="stylesheet" href="styles.css?v=one">
     <!-- external js libs -->
     <script type="text/javascript" src="lib/three.js/build/three.min.js"></script>
     <script type="text/javascript" src="lib/cannon.min.js"></script>
@@ -20,7 +20,7 @@
     <script type="text/javascript" src="js/Arch.js"></script>
     <script type="text/javascript" src="js/Sound.js?v=sfx"></script>
     <script type="text/javascript" src="js/Wallet.js?v=players"></script>
-    <script type="text/javascript" src="js/Gui.js?v=cloth"></script>
+    <script type="text/javascript" src="js/Gui.js?v=one"></script>
     <script type="text/javascript" src="js/Live.js?v=guest"></script>
     <script type="text/javascript" src="js/Hole.js"></script>
     <script type="text/javascript" src="js/LongWall.js"></script>
@@ -84,10 +84,11 @@
       <div id="lobby" class="hide">
         <button type="button" class="lobby-back" onclick="gui.closeLobby()">Back</button>
         <p class="lobby-kicker">Tables</p>
+        <button type="button" class="city-arrow is-prev" data-dir="-1" aria-label="Previous table"></button>
+        <button type="button" class="city-arrow is-next" data-dir="1" aria-label="Next table"></button>
         <div class="city-stage">
-          <button type="button" class="carousel-nav" data-dir="-1" aria-label="Previous"></button>
           <div class="city-row">
-            <button type="button" class="city-card city-bot" data-city="bot">
+            <button type="button" class="city-card city-bot is-on" data-city="bot">
               <span class="city-body">
                 <span class="city-name">Play with bot</span>
                 <span class="city-stats">
@@ -173,7 +174,6 @@
               </span>
             </button>
           </div>
-          <button type="button" class="carousel-nav" data-dir="1" aria-label="Next"></button>
         </div>
         <div id="matchSearch" class="hide">
           <p class="match-search-kicker">Matchmaking</p>

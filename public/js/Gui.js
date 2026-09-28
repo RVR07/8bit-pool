@@ -28,54 +28,19 @@ var GameGui = function () {
   };
   var cards = document.querySelectorAll('#lobby .city-card');
   var self = this;
-  var row = document.querySelector('.city-row');
-  var drag = { active: false, x: 0, left: 0, moved: false };
-  row.addEventListener('pointerdown', function (event) {
-    if (event.button !== 0) return;
-    drag.active = true;
-    drag.moved = false;
-    drag.x = event.clientX;
-    drag.left = row.scrollLeft;
-  });
-  row.addEventListener('pointermove', function (event) {
-    if (!drag.active) return;
-    var dx = event.clientX - drag.x;
-    if (Math.abs(dx) < 10) return;
-    if (!drag.moved) {
-      drag.moved = true;
-      row.classList.add('is-dragging');
-      try { row.setPointerCapture(event.pointerId); } catch (err) {}
-    }
-    row.scrollLeft = drag.left - dx;
-  });
-  function endDrag() {
-    drag.active = false;
-    row.classList.remove('is-dragging');
-    if (drag.moved) {
-      setTimeout(function () { drag.moved = false; }, 0);
-    }
-  }
-  row.addEventListener('pointerup', endDrag);
-  row.addEventListener('pointercancel', endDrag);
-  var navs = document.querySelectorAll('.carousel-nav');
-  for (var n = 0; n < navs.length; n++) {
-    navs[n].addEventListener('click', function () {
-      if (typeof Sound !== 'undefined') Sound.select();
-      var card = row.querySelector('.city-card');
-      var gap = parseFloat(window.getComputedStyle(row).columnGap) || 0;
-      var step = card.offsetWidth + gap;
-      row.scrollBy({ left: Number(this.getAttribute('data-dir')) * step, behavior: 'smooth' });
+  this.cityIndex = 0;
+  var arrows = document.querySelectorAll('#lobby .city-arrow');
+  for (var n = 0; n < arrows.length; n++) {
+    arrows[n].addEventListener('click', function () {
+      self.stepCity(Number(this.getAttribute('data-dir')));
     });
   }
   for (var i = 0; i < cards.length; i++) {
     cards[i].addEventListener('click', function (event) {
-      if (drag.moved) {
-        drag.moved = false;
-        return;
-      }
       self.pickCity(event.currentTarget.getAttribute('data-city'));
     });
   }
+  this.showCity();
   if (debug) document.getElementById('fps_stats_container').appendChild( stats.domElement );
   this.loadProfile();
   this.buildCueSelect();
@@ -143,6 +108,7 @@ GameGui.prototype.openLobby = function () {
   this.show(lobby);
   void lobby.offsetWidth;
   GameGui.addClass(lobby, 'is-entering');
+  this.showCity();
   var self = this;
   setTimeout(function () {
     self.hide(menu);
@@ -154,10 +120,34 @@ GameGui.prototype.closeLobby = function () {
   var menu = document.getElementById('mainMenu');
   var lobby = document.getElementById('lobby');
   this.cancelMatch();
+  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(null);
   GameGui.removeClass(menu, 'is-leaving');
   GameGui.removeClass(lobby, 'is-entering');
   this.hide(lobby);
   this.show(menu);
+};
+
+GameGui.prototype.showCity = function () {
+  var cards = document.querySelectorAll('#lobby .city-card');
+  if (!cards.length) return;
+  var count = cards.length;
+  var index = this.cityIndex || 0;
+  index = ((index % count) + count) % count;
+  this.cityIndex = index;
+  for (var i = 0; i < count; i++) {
+    if (i === index) GameGui.addClass(cards[i], 'is-on');
+    else GameGui.removeClass(cards[i], 'is-on');
+  }
+  var id = cards[index].getAttribute('data-city');
+  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(id === 'bot' ? null : id);
+};
+
+GameGui.prototype.stepCity = function (dir) {
+  var cards = document.querySelectorAll('#lobby .city-card');
+  if (!cards.length) return;
+  if (typeof Sound !== 'undefined') Sound.select();
+  this.cityIndex = (this.cityIndex || 0) + dir;
+  this.showCity();
 };
 
 GameGui.CITY_NAMES = {
@@ -280,7 +270,7 @@ GameGui.prototype.cancelMatch = function () {
   }
   this.hide(document.getElementById('matchSearch'));
   this.setSearching(false);
-  if (typeof Table !== 'undefined' && Table.setCity) Table.setCity(null);
+  this.showCity();
   if (typeof Wallet !== 'undefined' && Wallet.account) {
     fetch('/api/match?address=' + encodeURIComponent(Wallet.account), { method: 'DELETE' }).catch(function () {});
   }
